@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Stripe SetupIntents Demo</title>
+  <!-- Load Stripe.js from the official CDN -->
+  <script src="https://js.stripe.com/v3/"></script>
+</head>
+<body>
+  <h1>Save Your Card</h1>
+  <form id="payment-form">
+    <label for="card-element">Enter Card Info</label>
+    <div id="card-element"><!-- Stripe Card Element will be injected here --></div>
+    <button id="submit-button" type="submit">Save Card</button>
+  </form>
+  <div id="error-message" style="color:red;"></div>
+
+  <script>
+    // Replace with your publishable key  
+    const stripe = Stripe("input your stripe public key");
+    const elements = stripe.elements();
+
+    // Create an instance of the card Element
+    const cardElement = elements.create('card', {
+      style: {
+        base: {
+          fontSize: '16px',
+          color: '#32325d',
+        },
+      },
+      hidePostalCode: true,
+      disableLink: true
+    });
+
+    // Mount the card Element
+    cardElement.mount('#card-element');
+
+    const initButton = document.getElementById('init-button');
+    const form = document.getElementById('payment-form');
+    const errorMessage = document.getElementById('error-message');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      errorMessage.textContent = '';
+
+      try {
+        // 1. Request a SetupIntent from our Go backend
+        //    Hardcode an example email for demo; in production use the authenticated user's email.
+        const email = 'user@example.com';
+        const response = await fetch('/api/setup-intent', {
+          method: 'POST',
+          body: new URLSearchParams({ email }), 
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to create SetupIntent');
+        }
+
+        const clientSecret = await response.text();
+        console.log("clientSecret:", clientSecret)
+        // clientSecret = "seti_1QbDHHDkWnJMmqVcWI0aqcDd_secret_RUBe3Zo3vF2J30jNfAqUDu0voEEMHUa"
+        // 2. Confirm the SetupIntent with the card details
+        const { setupIntent, error } = await stripe.confirmCardSetup(clientSecret, {
+          payment_method: {
+            card: cardElement,
+            // billing_details: {
+            //   name: 'John Doe',
+            // },
+          },
+        });
+
+        if (error) {
+          // Show error to your customers
+          errorMessage.textContent = error.message;
+          return;
+        }
+        console.log(setupIntent)
+        // If setupIntent.status === 'succeeded', card is saved
+        alert('Your card has been saved! PaymentMethod ID: ' + setupIntent.payment_method);
+
+
+        // (Optional) You might want to save the PaymentMethod ID in your own DB as well.
+      } catch (err) {
+        errorMessage.textContent = err.message;
+      }
+    });
+  </script>
+</body>
+</html>
